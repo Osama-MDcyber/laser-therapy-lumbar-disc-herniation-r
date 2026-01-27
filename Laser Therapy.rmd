@@ -1,0 +1,270 @@
+---
+title: "Laser Therapy in Lumbar Disc Herniation Report"
+author: "Osama Ahmed Ibrahim"
+output: word_document
+---
+```{r message=FALSE, warning=FALSE, include=FALSE}
+knitr::opts_chunk$set(
+  dpi = 300)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Running Needed Libraries 
+library(readxl)
+library(tidyverse)
+library(writexl)
+library(gtsummary)
+library(janitor)
+library(broom)
+library(rstatix)
+library(flextable)
+library(broom)
+library(glue)
+
+
+
+# Reading and Uploading Excel Files 
+# The Data Was separated into three excel files each has the data of a single group
+high_group1 <- read_excel(path = "group 1.high.xlsx")
+low_group2 <- read_excel(path = "group 2 low.xlsx")
+placebo_group3 <- read_excel(path = "group 3 placeb.xlsx")
+
+# Adding a column distinguishing groups in each excel file 
+high_group1 <- high_group1 %>% mutate(Group = "High Intensity")
+low_group2 <- low_group2 %>% mutate(Group = "Low Intensity")
+placebo_group3 <- placebo_group3 %>% mutate(Group = "Placebo")
+
+# Removing unneeded text that was present besides a numeric value and removing extra spaces 
+high_group1$weight <- high_group1$weight %>% str_remove("KG") %>% str_trim() %>% as.numeric()
+
+# Combingin and stacking data on top of each other to one data frame 
+All_Data <- bind_rows(high_group1, low_group2, placebo_group3)
+
+# Creating an ID column as it would be most needed when doing paried tests 
+All_Data <- All_Data %>% mutate(name = row_number()) %>% rename("ID" = name)
+
+# Renaming Column Names to be clearer 
+All_Data <- All_Data %>% rename("Marital Status" = `marr/single`,
+                    "Height" = length,
+                    "RMDQ Before" = `R M befor(range =0-24)`,
+                    "RMDQ After" = `R M after (0_ 24)`,
+                    "ST Before" = `ST- befor`,
+                    "ST After" = `ST- after`,
+                    "OSW Before" = `OSW- before (range= 0 -100%)`,
+                    "OSW After" = `OSW- after (range= 0 -100%)`,
+                    "VAS-Activity Before" = `VAS (range= 0- 10)- ACTIVITY before`,
+                    "VAS-Activity After" = `VAS (range= 0- 10)- ACTIVITY after`,
+                    "VAS-Rest After" = `VAS (range= 0- 10)- REST after`,
+                    "VAS-Rest Before" = `VAS (range= 0- 10)- REST before`)
+
+
+# Converting Needed Variables into a factor 
+All_Data <- All_Data %>% mutate(across(c("gender", "Marital Status", "Group"), ~ factor(.x)))
+
+# Removing extra space and unneeded text 
+All_Data <- All_Data %>% mutate(across(c("ST After", "ST Before"), ~str_remove(.x, "cm|CM")))
+
+# Converting needed variables to numeric 
+All_Data <- All_Data %>% mutate(across(c("ST After", "ST Before"), ~as.numeric(.x)))
+
+# Creating a BMI column 
+All_Data <- All_Data %>% mutate(BMI = round(weight/(Height/100)^2, digits = 0))
+
+# Adjusting Location of BMI column to be at the beginninng just for aesthetics 
+All_Data <- All_Data %>% relocate(BMI, .after = Height)
+
+# Specifiying specific factor values by recode 
+All_Data$`Marital Status` <- All_Data$`Marital Status` %>% fct_recode("Married" = "M",
+                                         "Single" = "S")
+All_Data$gender <- All_Data$gender %>% fct_recode("Female" = "F",
+                               "Male" = "M")
+```
+  R version 4.5.1 (2025-06-13) was used to conduct the analysis. Visual Inspection and Shapiro-Wilk test were performed to assess normality of data to determine the appropriate statistical tests. Data not normally distributed was presented by median and interquartile range. Mann-Whitney U test and Kruskal-Wallis test were used to compare between groups of data not normally distributed. Categorical data were presenetd with frequencies and an appropriate Chi-squared test or Fisher exact test was used for the comparison. Significant differences were determined by Bonferroni post hoc tests. P value <0.05 was considered statistically significant.
+
+
+## Results
+  60 patients were enrolled in the study. Table 1 represents different patients' demographics.
+
+#### Table 1: Demographics and Patients Characteristics 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Creating a demographics summary table with calculated p-value between the two groups to check for Randomization
+All_Data %>% select(gender:`Marital Status`, -Height, -weight, Group, `RMDQ Before`, `ST Before`, `OSW Before`,
+                    `VAS-Rest Before`, `VAS-Activity Before`) %>%
+  tbl_summary(by = Group,
+              label = list(
+                gender ~ "Gender",
+                age ~ "Age",
+                `ST Before` ~ "Schober Test",
+                `RMDQ Before` ~ "Roland Morris Disability Questionnaire",
+                `OSW Before` ~ "Oswestry Disability Index",
+                `VAS-Rest Before`~ "VAS Rest",
+                `VAS-Activity Before` ~ "VAS Activity"
+              ),
+              type = list(
+                `ST Before` ~ "continuous",
+                `VAS-Rest Before` ~ "continuous",
+                `VAS-Activity Before` ~ "continuous"
+              ),
+              digits = list(
+                `RMDQ Before` ~ 1,
+                `ST Before` ~ 0,
+                `VAS-Rest Before` ~1,
+                `VAS-Activity Before` ~0
+              )) %>% add_overall() %>% add_p() %>% bold_labels() %>% as_flex_table() %>%  set_table_properties(layout = "autofit", width = 1) %>%
+  autofit()
+```
+
+  All three groups demonstrated significant improvements from baseline to post-intervention across all outcome measures (p<0.001). All within-group comparisons remained significant after Bonferroni correction for multiple testing (q<0.01). (Table 2)
+
+#### Table 2: Within-group changes in patient-reported outcomes and pain scores from baseline to post-intervention 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Doing before and after wilcoxin signed-rank test for paired data with correction and presenting it in a table
+All_Data %>% select(ID, Group, `RMDQ Before`, `RMDQ After`, `ST Before`, `ST After`,
+                    `OSW After`, `OSW Before`, `VAS-Rest After`, `VAS-Rest Before`,
+                    `VAS-Activity After`, `VAS-Activity Before`) %>% 
+  pivot_longer(cols = -c(ID, Group),
+               names_to = c("Score", "Time"),
+               names_sep = " ",
+               values_to = "Value") %>% 
+  mutate(Time = factor(Time, levels = c("Before", "After"))) %>% 
+  pivot_wider(names_from = Score, values_from = Value) %>%  
+  tbl_strata(strata = Group, .tbl_fun = ~ .x %>%  
+               tbl_summary(by = Time,
+                           include = c(RMDQ, ST, OSW, `VAS-Rest`, `VAS-Activity`),
+                           type = list(ST ~ "continuous",
+                                       `VAS-Rest` ~ "continuous",
+                                       `VAS-Activity` ~ "continuous"
+                           ),
+                           digits = list(
+                             ST ~ 1,
+                             `VAS-Rest` ~ 1,
+                             `VAS-Activity` ~1
+                           )) %>% 
+               add_p(test = everything() ~ "paired.wilcox.test", group = ID) %>% 
+               add_q(method = "bonferroni")) %>% 
+  modify_column_hide(starts_with("p.value")) %>%
+  modify_header(starts_with("q.value") ~ "**p-value**") %>%
+  modify_table_styling(
+    columns = starts_with("q.value"),
+    footnote = "Wilcoxon signed rank test with Bonferroni correction for multiple testing"
+  ) %>% 
+  as_flex_table() %>% set_table_properties(layout = "autofit", width = 1) %>%
+  autofit()
+```
+
+  Between-group comparisons of change scores revealed significant differences across all outcome measures. The High Intensity group demonstrated significantly greater improvements compared to the other groups, with a median RMDQ reduction of -10.0 points, ST increase of 3.00, OSW decrease of -0.41, and VAS-Activity and VAS-Rest reductions of -7.00 and -6.00, respectively. Group differences were statistically significant for RMDQ, OSW, VAS-Activity, and VAS-Rest (p≤0.003), with most remaining significant after Bonferroni correction ( Table 3 )
+
+#### Table 3:  Between-group change scores and pairwise comparisons Kruskal–Wallis with Bonferroni-adjusted post hoc tests.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Creating a data frame that contains only needed measures for outcome with group and ID 
+Effect_Size_Data <- All_Data %>% 
+  select(ID, Group, `RMDQ After`, `RMDQ Before`, `ST After`, `ST Before`,
+         `OSW After`, `OSW Before`, 
+         `VAS-Activity After`, `VAS-Activity Before`, `VAS-Rest After`, `VAS-Rest Before`) %>% 
+  mutate(`RMDQ Change` = `RMDQ After` - `RMDQ Before`,
+         `ST Change` = `ST After` - `ST Before`,
+         `OSW Change` = `OSW After` - `OSW Before`,
+         `VAS Activity Change` = `VAS-Activity After` - `VAS-Activity Before`,
+         `VAS Rest Change` = `VAS-Rest After` - `VAS-Rest Before`)
+
+
+# Defining a function for pairwise Mann whitny tests or wilcoxin for applying post hoc analysis with correction
+gts_pairwise_wilcox <- function(data, variable, by, ...) {
+  pw <- pairwise.wilcox.test(data[[variable]], data[[by]], p.adj = "bonferroni")
+  
+# Convert the test results tidy data format and selecting needed columns and reshaping it to wide format 
+  pw_tidy <- broom::tidy(pw) %>%
+    mutate(label = glue("**{group2} vs. {group1}**")) %>%
+    select(label, p.value) %>%
+    spread(label, p.value)
+  
+  return(pw_tidy)
+}
+# Convert the test results tidy data format and selecting needed columns and reshaping it to wide format 
+pw_table <- Effect_Size_Data %>%
+  select(contains("Change"), Group) %>%
+  tbl_summary(by = Group,
+              type = `ST Change` ~ "continuous") %>%
+  add_stat(fns = everything() ~ gts_pairwise_wilcox) %>%
+  modify_fmt_fun(starts_with("**") ~ style_pvalue)
+
+# Creating a table with result of krsukal-wallis which is the non parametric equivalent to anova between groups
+# Adding our pairwise post hoc results by add-stat and putting the function we made
+Effect_Size_Data %>% select(contains("Change"), Group) %>% 
+  tbl_summary(by = Group,
+              type = `ST Change` ~ "continuous") %>% add_p() %>% 
+  add_q(method = "bonferroni") %>% modify_header(starts_with("q.value") ~ "**p-value**") %>% 
+  modify_column_hide(starts_with("p.value")) %>% modify_table_styling(
+    columns = starts_with("q.value"),
+    footnote = "Kruskal-Wallis rank sum test with Bonferroni correction for multiple testing"
+  ) %>%  add_stat(fns = everything() ~ gts_pairwise_wilcox) %>%
+  modify_fmt_fun(starts_with("**") ~ style_pvalue) %>% bold_labels() %>% as_flex_table() %>%  set_table_properties(layout = "autofit", width = 1) %>%
+  autofit()
+
+```
+
+  Post hoc pairwise comparisons with Bonferroni correction revealed that the High Intensity group achieved significantly greater improvements than the Placebo group across all outcome measures (RMDQ: p.adj<0.001; OSW: p.adj=0.003; ST: p.adj=0.033; VAS-Activity: p.adj=0.002; VAS-Rest: p.adj=0.004). The High Intensity group also demonstrated significantly superior outcomes compared to the Low Intensity group for RMDQ (p.adj=0.032), OSW (p.adj=0.045), and VAS-Activity (p.adj=0.032), though differences in ST and VAS-Rest did not reach significance after correction (p.adj=0.138 and 0.061, respectively). In contrast, the Low Intensity group did not differ significantly from the Placebo group on any outcome measure after Bonferroni correction (all p.adj>0.42), suggesting that low-intensity intervention provided minimal additional benefit beyond placebo effects.
+
+  Figure 1 and 2 illustrates the median and IQR values of all outcome measures before and after intervention for the High Intensity, Low Intensity, and Placebo groups. All three groups showed improvements across disability scores. The visual representation highlights the dose-dependent relationship between intervention intensity and clinical outcomes, with greater improvements observed in functional capacity and pain reduction as intervention intensity increased.
+  
+#### Figure 1: Faceted median line plot (IQR error bars) of pre–post outcomes by treatment group
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Creating a median line plot showing results of before and after with error bars in different clinical tests
+# Scales are made to free in faceting as each clinical test has its own numbers 
+All_Data %>%
+  select(ID, Group,
+         `RMDQ Before`, `RMDQ After`,
+         `ST Before`, `ST After`,
+         `OSW Before`, `OSW After`,
+         `VAS-Rest Before`, `VAS-Rest After`,
+         `VAS-Activity Before`, `VAS-Activity After`) %>%
+  pivot_longer(
+    cols = -c(ID, Group),
+    names_to = c("Outcome", "Time"),
+    names_sep = " ",
+    values_to = "Value"
+  ) %>%
+  mutate(
+    Time = factor(Time, levels = c("Before", "After")),
+    Outcome = factor(Outcome)
+  )  %>%
+  group_by(Group, Outcome, Time) %>%
+  summarise(
+    med = median(Value, na.rm = TRUE),
+    q1  = quantile(Value, 0.25, na.rm = TRUE),
+    q3  = quantile(Value, 0.75, na.rm = TRUE)) %>% ungroup() %>% 
+  ggplot(aes(x = Time, y = med, color = Group, group = Group)) + scale_color_manual(
+    values = c("#C1121F", "#003049", "#669BBC")) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2.4) +
+  geom_errorbar(aes(ymin = q1, ymax = q3), width = 0.10, linewidth = 0.6) +
+  facet_wrap(~ Outcome, scales = "free",ncol = 3) +
+  labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "top",
+    axis.text.x = element_text(face = "bold")
+  )
+
+```
+
+#### Figure 2: Comparison of Pre- and Post-Intervention Outcome Measures Across Treatment Groups
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Creating a bar graph with the results of different clinincal measures in different groups before and after 
+All_Data %>% select(`RMDQ After`, `RMDQ Before`, `ST After`, `ST Before`,
+                    `VAS-Activity After`, `VAS-Activity Before`, `VAS-Rest After`,
+                    `VAS-Rest Before`, `OSW After`, `OSW Before`, Group) %>% 
+  pivot_longer(cols = c(`RMDQ After`, `RMDQ Before`, `ST After`, `ST Before`,
+                        `VAS-Activity After`, `VAS-Activity Before`, `VAS-Rest After`,
+                        `VAS-Rest Before`, `OSW After`, `OSW Before`),
+               names_to = "Score",
+               values_to = "Value") %>% group_by(Group, Score) %>% 
+  summarise(Median = median(Value)) %>% 
+  mutate(Score = factor(Score, levels = c("RMDQ Before", "RMDQ After", "ST Before", "ST After",
+                                          "VAS-Activity Before", "VAS-Activity After", "VAS-Rest Before",
+                                          "VAS-Rest After", "OSW Before", "OSW After"))) %>% 
+  ggplot(aes(Score, Median, fill = Group)) +
+  geom_col(position = position_dodge(width = 0.5)) + scale_fill_manual(
+      values = c("#C1121F", "#003049", "#669BBC")) + theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, color = "black", face = "bold"))
+```
+
