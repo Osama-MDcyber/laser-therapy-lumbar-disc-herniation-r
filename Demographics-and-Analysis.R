@@ -2,7 +2,7 @@
 # Running the script the contains the cleaned data and needed libraries 
 source("Data-Cleaning.R")
 
-# Runninng Needed Libraries 
+# Running Needed Libraries 
 library(patchwork)
 library(broom)
 library(glue)
