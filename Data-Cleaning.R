@@ -9,7 +9,6 @@ library(broom)
 library(rstatix)
 library(flextable)
 
-
 # Reading and Uploading Excel Files 
 # The Data Was separated into three excel files each has the data of a single group
 high_group1 <- read_excel(path = "group 1.high.xlsx")
